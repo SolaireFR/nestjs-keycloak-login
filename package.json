@@ -1,0 +1,21 @@
+{
+  "name": "nestjs-keycloak-login",
+  "version": "1.0.1",
+  "description": "",
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@nestjs/common": "^11.1.9",
+    "@nestjs/core": "^11.1.9"
+  },
+  "devDependencies": {
+    "@types/express-session": "^1.18.2"
+  }
+}
