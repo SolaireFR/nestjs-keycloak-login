@@ -84,41 +84,40 @@ export class AuthGuard implements CanActivate {
                             'utf8',
                         );
                         const payload = JSON.parse(json) as unknown;
-                        // ensure payload is an object before accessing properties
-                        const isRecord = (
-                            v: unknown,
-                        ): v is Record<string, unknown> =>
+
+                        const isRecord = (v: unknown): v is Record<string, unknown> =>
                             typeof v === 'object' && v !== null;
-                        let id: string | number | null = null;
+
                         if (isRecord(payload)) {
+                            // Log remaining token time if exp is present
+                            const exp = payload['exp'];
+                            if (typeof exp === 'number') {
+                                const nowSec = Math.floor(Date.now() / 1000);
+                                const remainingSec = exp - nowSec;
+                                const remainingMin = remainingSec / 60;
+                                // Use a concise log; adjust as needed to your logger
+                                console.log(
+                                    `[AuthGuard] Token remaining time: ${remainingSec}s (${remainingMin.toFixed(2)}m)`,
+                                );
+                            }
+
+                            // attach user id to request
+                            let id: string | number | null = null;
                             const sub = payload['sub'];
                             const userId = payload['user_id'];
-                            if (
-                                typeof sub === 'string' ||
-                                typeof sub === 'number'
-                            ) {
+                            if (typeof sub === 'string' || typeof sub === 'number') {
                                 id = sub;
-                            } else if (
-                                typeof userId === 'string' ||
-                                typeof userId === 'number'
-                            ) {
+                            } else if (typeof userId === 'string' || typeof userId === 'number') {
                                 id = userId;
                             }
                             if (id != null) {
-                                // attach to request for controllers and decorators (e.g. CurrentUserId)
-                                const reqWithUser = request as Request & {
-                                    user?: { id?: string | number };
-                                };
+                                const reqWithUser = request as Request & { user?: { id?: string | number } };
                                 reqWithUser.user = { id };
                             }
                         }
                     }
                 } catch {
-                    // ignore decode errors;
-                    throw new HttpException(
-                        'Unauthorized',
-                        HttpStatus.UNAUTHORIZED,
-                    );
+                    throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
                 }
             }
 
