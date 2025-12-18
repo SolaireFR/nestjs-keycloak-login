@@ -30,11 +30,26 @@ export class AuthController {
     }
 
     // --- LOGOUT ---
+    @Public()
     @Get('logout')
-    logout(
+    async logout(
         @Req() req: Request,
         @Res({ passthrough: false }) res: Response,
-    ): void {
+    ): Promise<void> {
         return this.keycloakService.logout(req, res);
+    }
+
+    // --- ERROR ---
+    @Public()
+    @Get('error')
+    error(
+        @Res({ passthrough: false }) res: Response,
+        @Req() req: Request,
+    ): void {
+        const { code = 500, message = 'Authentication error occurred' } =
+            req.query;
+        res.status(Number(code)).send({
+            message,
+        });
     }
 }

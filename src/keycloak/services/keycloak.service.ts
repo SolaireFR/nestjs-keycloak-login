@@ -9,11 +9,7 @@ export class KeycloakService {
     constructor(@Inject('KEYCLOAK_CONFIG') private config: KeycloakEnvConfig) {}
 
     public login(req: Request, res: Response): void {
-        // compute redirect URI from incoming request so it matches Keycloak client entry exactly
-        const redirectUri =
-            req.protocol && req.get('host')
-                ? `${req.protocol}://${req.get('host')}/auth/callback`
-                : this.config.keycloakCallbackURL;
+        const redirectUri = `${req.protocol}://${req.get('host')}/auth/callback`;
 
         const params = new URLSearchParams({
             client_id: this.config.keycloakClientId,
@@ -39,7 +35,9 @@ export class KeycloakService {
               : undefined;
 
         if (!code) {
-            res.status(400).send('Missing or invalid code');
+            res.redirect(
+                '/auth/error?code=400&message=Authorization code not provided',
+            );
             return;
         }
 
@@ -68,39 +66,41 @@ export class KeycloakService {
         try {
             tokens = (await tokenRes.json()) as KeycloakTokenResponseDto;
         } catch (e) {
-            console.error('Error parsing token response JSON:', e);
+            console.debug('Error parsing token response JSON:', e);
             const text = await tokenRes.text().catch(() => 'invalid json');
-            res.status(502).send(`Token exchange invalid response: ${text}`);
+            res.redirect(
+                `/auth/error?code=502&message=Invalid token response: ${encodeURIComponent(
+                    text,
+                )}`,
+            );
             return;
         }
 
-        // Debug: log what Keycloak returned (safe for dev only)
-        console.debug('Keycloak token response:', tokens);
-        const idPayload = this.tryDecodeJwtPayload(tokens?.id_token ?? null);
-        if (idPayload) console.debug('Decoded id_token payload:', idPayload);
-
         // Validate presence of access_token (otherwise Keycloak denied)
         if (!tokens || !tokens.access_token) {
-            res.status(502).send({
-                message:
-                    'Token exchange succeeded but no access_token returned',
-                tokenResponse: tokens,
-            });
+            res.redirect(`/auth/error?code=502&message=Token exchange failed`);
             return;
         }
 
         // Store token payload in cookie-session (kept minimal)
-        (req.session as UserSession).keycloakToken = {
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-            id_token: tokens.id_token,
-        };
+        try {
+            (req.session as UserSession).keycloakToken = {
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                id_token: tokens.id_token,
+            };
+        } catch (err) {
+            console.debug('Error storing token in session:', err);
+            return res.redirect(
+                '/auth/error?code=500&message=Session storage failed',
+            );
+        }
 
         return res.redirect('/protected'); // Ton front ou route protégée
     }
 
     // --- LOGOUT ---
-    logout(req: Request, res: Response): void {
+    async logout(req: Request, res: Response): Promise<void> {
         // read id_token from session (support both injected session or req.session)
         const idToken = (req.session as UserSession).keycloakToken?.id_token;
 
@@ -119,18 +119,23 @@ export class KeycloakService {
             // ignore if clearCookie not available or fails
         }
 
-        const baseUrl =
-            req.protocol && req.get('host')
-                ? `${req.protocol}://${req.get('host')}`
-                : 'http://localhost:3000';
-
         const url =
             `${this.config.keycloakHost}/logout` +
             `?client_id=${this.config.keycloakClientId}` +
-            `&id_token_hint=${encodeURIComponent(String(idToken))}` +
-            `&post_logout_redirect_uri=${encodeURIComponent(baseUrl + '/')}`;
+            `&id_token_hint=${encodeURIComponent(String(idToken))}`;
 
-        return res.redirect(url);
+        try {
+            const logoutRes = await fetch(url, { method: 'GET' });
+            if (logoutRes.ok) {
+                res.status(200).send('Logged out successfully');
+            } else {
+                res.status(502).send('Logout failed at Keycloak');
+            }
+        } catch (err) {
+            console.debug('Error during logout request to Keycloak:', err);
+            res.status(502).send('Logout request to Keycloak failed');
+        }
+        return;
     }
 
     // helper to decode JWT payloads (id_token) for debugging

@@ -38,15 +38,15 @@ export class AuthGuard implements CanActivate {
                 [key: string]: any;
             }
             interface MySession {
-                keycloak?: TokenResponse | null;
+                keycloakToken?: TokenResponse | null;
             }
 
             // Try to read token from session first (access_token or id_token)
             const session = (request as Request & { session?: MySession })
                 .session;
             const sessionToken =
-                session?.keycloak?.access_token ??
-                session?.keycloak?.id_token ??
+                session?.keycloakToken?.access_token ??
+                session?.keycloakToken?.id_token ??
                 null;
 
             // Determine the header to use for validation.

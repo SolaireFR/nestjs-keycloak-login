@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 export interface KeycloakEnvConfig {
     keycloakHost: string;
     keycloakRealm: string;
